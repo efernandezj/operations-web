@@ -1,0 +1,626 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy a service on AWS Fargate, hosted in a private subnet, but accessible via a public load balancer.
+
+Parameters:
+  ParentStackName:
+    Type: String
+    Description: The name of the parent networking stack
+
+  HostedZoneName:
+    Type: String
+    Description: Hosted zone name
+
+  HostedZoneId:
+    Type: String
+    Description: Parent zone ID for DNS names
+
+  DomainName:
+    Type: String
+    Description: Domain name for ALB host based routing
+
+  PriorityPrefix:
+    Type: Number
+    Description: Prefix for ALB routing priorities
+
+  DatabaseUser:
+    Type: String
+    Description: Database username
+    Default: 'web'
+
+  DatabasePassword:
+    Type: String
+    NoEcho: true
+    Description: Database password
+
+  DatabaseName:
+    Type: String
+    Default: 'operations'
+
+  DatabaseParams:
+    Type: CommaDelimitedList
+    Description: |
+      Database parameters: DBInstanceClass[0], EngineVersion[1], BackupRetentionPeriod[2], PreferredBackupWindow[3], PreferredMaintenanceWindow[4]
+    Default: 'db.r4.large,5.7.mysql_aurora.2.10.2,7,01:00-02:00,mon:03:00-mon:04:00'
+
+  ImageRepository:
+    Type: String
+    Description: Image repository
+    Default: '028137510215.dkr.ecr.us-east-1.amazonaws.com/'
+
+  ImageTag:
+    Type: String
+    Description: Image tag
+    Default: ':latest'
+
+  BastionAMI:
+    Type: String
+    Description: Bastion AMI
+    Default: 'ami-00357a9cabb66be56'
+
+  BastionKey:
+    Type: String
+    Description: Keypair name for bastion instance
+
+  LogParams:
+    Type: CommaDelimitedList
+    Description: |
+      LogParams[0] LogsRetentionDays
+      LogParams[1] AuditRetentionDays
+      LogParams[2] MetricsRetentionDays
+    Default: 180,3653,365
+
+  Route53:
+    Type: String
+    Default: enabled
+    AllowedValues:
+      - enabled
+      - disabled
+    Description: To disable Route 53 if DNS needs to be managed manually
+
+  StartServices:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: Whether services should be started after deployment, used for migrations where services have to be shutdown
+
+  DeployServices:
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    Description: Whether services should be deployed during deployment, used for first time stack creation when no database exists
+
+  TaskCPUMemory:
+    Type: CommaDelimitedList
+    Description: |
+      CPU & Memory for ECS tasks:
+        api: [0]  - cpu, [1]  - memory, [2]  - desired count
+      Check https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-cpu-memory-error.html for allowed CPU/Memory combinations
+      Allowed values for CPU: 256,512,1024,2048,4096
+      Allowed values for memory: 512,1024,2048,3072,4096,5120,6144,7168,8192,9216,10240,11264,12288,13312,14336,15360,16384
+    Default: 1024,2048,1
+
+  TrustedCIDRs:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Trusted source CIDRs for bastion security group
+
+  LocalDev:
+    Type: String
+    Description: Enable/disable user for local dev
+    Default: 'disabled'
+    AllowedValues:
+      - enabled
+      - disabled
+
+  AccessKeySerial:
+    Type: Number
+    Default: 1
+    Description: Serial number for access keys
+
+Conditions:
+  Route53Enabled: !Equals [!Ref 'Route53', 'enabled']
+  StartServicesEnabled: !Equals [!Ref 'StartServices', 'true']
+  DeployServicesEnabled: !Equals [!Ref 'DeployServices', 'true']
+  LocalDevEnabled: !Equals [!Ref LocalDev, 'enabled']
+
+# See installation instructions:
+# https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/S3Objects
+# https://github.com/awslabs/aws-cloudformation-templates/tree/master/aws/services/CloudFormation/MacrosExamples/PyPlate
+Transform:
+  - S3Objects
+  - PyPlate
+
+Resources:
+
+  #--------------------------------------------------------------------------------------------------------------------
+  # Common resources
+  #--------------------------------------------------------------------------------------------------------------------
+
+  CloudwatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref 'AWS::StackName'
+      RetentionInDays: !Select [0, !Ref 'LogParams']
+
+  LocalDevUser:
+    Type: AWS::IAM::User
+    Condition: LocalDevEnabled
+
+  LocalDevAccessKey:
+    Type: AWS::IAM::AccessKey
+    Condition: LocalDevEnabled
+    Properties:
+      UserName: !Ref 'LocalDevUser'
+      Serial: !Ref 'AccessKeySerial'
+
+  LocalDevPolicy:
+    Type: AWS::IAM::Policy
+    Condition: LocalDevEnabled
+    Properties:
+      PolicyName: !Sub 'localdev-${AWS::StackName}'
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'cloudfront:CreateInvalidation'
+            Resource: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+      Users:
+        - !Ref 'LocalDevUser'
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+                - ec2.amazonaws.com
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - !Ref "AWS::NoValue"
+
+  AutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [application-autoscaling.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: service-autoscaling
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+
+  ECSScalingPolicy:
+    Type: AWS::IAM::Policy
+    DependsOn:
+      - InstanceRole
+    Properties:
+      PolicyName: !Sub 'ecs-scaling-${AWS::StackName}'
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ecs:UpdateService'
+              - 'ecs:DescribeServices'
+            Resource: '*'
+      Roles:
+        - Ref: 'InstanceRole'
+
+  #--------------------------------------------------------------------------------------------------------------------
+  # Bastion instance
+  #--------------------------------------------------------------------------------------------------------------------
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - DBCluster
+    Properties:
+      ImageId: !Ref 'BastionAMI'
+      SecurityGroupIds:
+        - !Ref 'BastionSecurityGroup'
+        - {'Fn::ImportValue': !Sub '${ParentStackName}:FargateContainerSecurityGroup'}
+      SubnetId: {'Fn::ImportValue': !Sub '${ParentStackName}:PublicSubnetOne'}
+      InstanceType: 't2.micro'
+      KeyName: !Ref 'BastionKey'
+      IamInstanceProfile: !Ref 'BastionInstanceProfile'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-bastion'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          printf '[client]\nhost="${DBCluster.Endpoint.Address}"\nuser="${DatabaseUser}"\npassword="${DatabasePassword}"\n' > /root/.my.cnf
+          chmod 0600 /root/.my.cnf
+          # to run user data script at every reboot
+          rm /var/lib/cloud/instances/*/sem/config_scripts_user
+
+  BastionInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        - Ref: 'InstanceRole'
+
+  BastionEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref 'BastionInstance'
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: {'Fn::ImportValue': !Sub '${ParentStackName}:VPCId'}
+      GroupDescription: Enable SSH access and HTTP access on the configured port
+      SecurityGroupIngress: |
+        #!PyPlate
+        output = []
+        for cidr in params['TrustedCIDRs']:
+          output.append({
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort" : "22",
+            "CidrIp" : cidr
+          })
+
+  BastionRecordSet:
+    Type: AWS::Route53::RecordSet
+    Condition: Route53Enabled
+    Properties:
+      HostedZoneId: !Ref 'HostedZoneId'
+      Name: !Sub '${DomainName}-bastion.${HostedZoneName}.'
+      Type: A
+      TTL: '900'
+      ResourceRecords:
+        - !Ref 'BastionEIP'
+
+  #--------------------------------------------------------------------------------------------------------------------
+  # MYSQL
+  # Database
+  #--------------------------------------------------------------------------------------------------------------------
+
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: !Ref 'AWS::StackName'
+      SubnetIds:
+        - {'Fn::ImportValue': !Sub '${ParentStackName}:PrivateSubnetOne'}
+        - {'Fn::ImportValue': !Sub '${ParentStackName}:PrivateSubnetTwo'}
+
+  DBClusterParameterGroup:
+    Type: 'AWS::RDS::DBClusterParameterGroup'
+    Properties:
+      Description: !Ref 'AWS::StackName'
+      Family: 'aurora-mysql5.7'
+      Parameters:
+        character_set_client: utf8
+        character_set_connection: utf8
+        character_set_database: utf8
+        character_set_filesystem: utf8
+        character_set_results: utf8
+        character_set_server: utf8
+        collation_connection: utf8_general_ci
+        collation_server: utf8_general_ci
+
+  DBCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: !Select [1, !Ref 'DatabaseParams']
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      MasterUsername: !Ref 'DatabaseUser'
+      MasterUserPassword: !Ref 'DatabasePassword'
+      StorageEncrypted: true
+      DatabaseName: !Ref 'DatabaseName'
+      BackupRetentionPeriod: !Select [2, !Ref 'DatabaseParams']
+      PreferredBackupWindow: !Select [3, !Ref 'DatabaseParams']
+      PreferredMaintenanceWindow: !Select [4, !Ref 'DatabaseParams']
+      DBSubnetGroupName: !Ref 'DBSubnetGroup'
+      VpcSecurityGroupIds:
+        - {'Fn::ImportValue': !Sub '${ParentStackName}:FargateContainerSecurityGroup'}
+
+  DBParameterGroup:
+    Type: 'AWS::RDS::DBParameterGroup'
+    Properties:
+      Description: !Ref 'AWS::StackName'
+      Family: 'aurora-mysql5.7'
+
+  DBPrimaryInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-mysql
+      DBParameterGroupName: !Ref DBParameterGroup
+      DBClusterIdentifier: !Ref 'DBCluster'
+      DBInstanceClass: !Select [0, !Ref 'DatabaseParams']
+      DBSubnetGroupName: !Ref "DBSubnetGroup"
+
+  #--------------------------------------------------------------------------------------------------------------------
+  # API
+  #--------------------------------------------------------------------------------------------------------------------
+
+  APITaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${AWS::StackName}-api'
+      Cpu: !Select [0, !Ref 'TaskCPUMemory']
+      Memory: !Select [1, !Ref 'TaskCPUMemory']
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      ExecutionRoleArn: {'Fn::ImportValue': !Sub '${ParentStackName}:ECSTaskExecutionRole'}
+      TaskRoleArn: !GetAtt 'InstanceRole.Arn'
+      ContainerDefinitions:
+        - Name: 'api'
+          #Image: !Sub '${ImageRepository}operations-web-api${ImageTag}'
+          Image: !Sub '${ImageRepository}dummy-api${ImageTag}'
+          PortMappings:
+            - ContainerPort: '443'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref 'AWS::StackName'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: 'backend'
+              awslogs-datetime-format: '%Y-%m-%d %H:%M:%S'
+          Environment:
+            - Name: DATABASE_USERNAME
+              Value: !Ref 'DatabaseUser'
+            - Name: DATABASE_PASSWORD
+              Value: !Ref 'DatabasePassword'
+            - Name: DATABASE_URL
+              Value: !Sub 'jdbc:mysql://${DBCluster.Endpoint.Address}:${DBCluster.Endpoint.Port}/${DatabaseName}'
+
+  APIService:
+    Type: AWS::ECS::Service
+    DependsOn: APILoadBalancerRuleHTTPS
+    Condition: DeployServicesEnabled
+    Properties:
+      ServiceName: !Sub '${AWS::StackName}-api'
+      Cluster: {'Fn::ImportValue': !Sub '${ParentStackName}:ClusterName'}
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      HealthCheckGracePeriodSeconds: 120
+      DesiredCount: !If [StartServicesEnabled, !Select [2, !Ref 'TaskCPUMemory'], 0]
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - {'Fn::ImportValue': !Sub '${ParentStackName}:FargateContainerSecurityGroup'}
+          Subnets:
+            - {'Fn::ImportValue': !Sub '${ParentStackName}:PrivateSubnetOne'}
+            - {'Fn::ImportValue': !Sub '${ParentStackName}:PrivateSubnetTwo'}
+      TaskDefinition: !Ref 'APITaskDefinition'
+      LoadBalancers:
+        - ContainerName: 'api'
+          ContainerPort: 443
+          TargetGroupArn: !Ref 'APITargetGroup'
+
+  APITargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: /api/version
+      HealthCheckProtocol: HTTPS
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      TargetType: ip
+      Port: 443
+      Protocol: HTTPS
+      UnhealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: '30'}
+      VpcId: {'Fn::ImportValue': !Sub '${ParentStackName}:VPCId'}
+
+  APILoadBalancerRuleHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref 'APITargetGroup'
+          Type: 'forward'
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub '${DomainName}-api.${HostedZoneName}'
+        - Field: path-pattern
+          Values:
+            - '/api/*'
+      ListenerArn: {'Fn::ImportValue': !Sub '${ParentStackName}:PublicListenerHTTPS'}
+      Priority: !Sub '${PriorityPrefix}20'
+
+  APIScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: APIService
+    Condition: DeployServicesEnabled
+    Properties:
+      MaxCapacity: 8
+      MinCapacity: !If [StartServicesEnabled, !Select [2, !Ref 'TaskCPUMemory'], 0]
+      ResourceId: !Join
+        - '/'
+        - - 'service'
+          - {'Fn::ImportValue': !Sub '${ParentStackName}:ClusterName'}
+          - !Sub '${AWS::StackName}-api'
+      RoleARN: !GetAtt [AutoscalingRole, Arn]
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+
+  #--------------------------------------------------------------------------------------------------------------------
+  # CDN
+  #--------------------------------------------------------------------------------------------------------------------
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [ 'GET', 'HEAD', 'PUT', 'POST' ]
+            AllowedOrigins: [ '*' ]
+            AllowedHeaders: [ '*' ]
+            ExposedHeaders:  [ 'ETag' ]
+            MaxAge: '3000'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+    DeletionPolicy: Delete
+
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub '${AWS::StackName}'
+
+  DistributionPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: OriginAccessIdentity
+    Properties:
+      Bucket: !Ref 'S3Bucket'
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: [ "s3:GetObject" ]
+            Resource: !Sub '${S3Bucket.Arn}/*'
+            Principal:
+              CanonicalUser: !GetAtt 'OriginAccessIdentity.S3CanonicalUserId'
+
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: 'ApiCachePolicy'
+        DefaultTTL: 2
+        MaxTTL: 600
+        MinTTL: 2
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - Authorization
+          QueryStringsConfig:
+            QueryStringBehavior: all
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+      - OriginAccessIdentity
+      - DistributionCertificate
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref 'DistributionCertificate'
+          SslSupportMethod: 'sni-only'
+        CacheBehaviors:
+          - AllowedMethods: [HEAD, DELETE, POST, GET, OPTIONS, PUT, PATCH]
+            TargetOriginId: ApiOrigin
+            PathPattern: '/api/*'
+            ViewerProtocolPolicy: https-only
+            ForwardedValues:
+              QueryString: true
+              Headers:
+                - Authorization
+            CachePolicyId: !Ref 'ApiCachePolicy'
+          - AllowedMethods: [HEAD, GET, OPTIONS]
+            Compress: true
+            TargetOriginId: S3Bucket
+            PathPattern: '/*'
+            ViewerProtocolPolicy: redirect-to-https
+            ForwardedValues: { QueryString: false }
+        DefaultCacheBehavior:
+          AllowedMethods: [HEAD, GET, OPTIONS]
+          Compress: true
+          TargetOriginId: S3Bucket
+          TrustedSigners: [ !Ref 'AWS::AccountId' ]
+          ViewerProtocolPolicy: https-only
+          #
+          # For policy IDs see
+          # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
+          # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html
+          #
+          CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6'  # CachingOptimized
+          OriginRequestPolicyId: '88a5eaf4-2fd4-4709-b370-b4c650ea3fcf'  # CORS-S3Origin
+        Origins:
+          - Id: S3Bucket
+            DomainName: !GetAtt S3Bucket.DomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${OriginAccessIdentity}'
+          - Id: ApiOrigin
+            DomainName: !Sub '${DomainName}-api.${HostedZoneName}'
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+        Aliases:
+          - !Sub '${DomainName}.${HostedZoneName}'
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: '/index.html'
+            ErrorCachingMinTTL: 10
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: '/index.html'
+            ErrorCachingMinTTL: 10
+
+  DistributionRecordSet:
+    Type: AWS::Route53::RecordSet
+    DependsOn:
+      - Distribution
+    Properties:
+      HostedZoneId: !Ref 'HostedZoneId'
+      Name: !Sub '${DomainName}.${HostedZoneName}.'
+      Type: A
+      AliasTarget:
+        # see https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
+        HostedZoneId: 'Z2FDTNDATAQYW2'
+        EvaluateTargetHealth: false
+        DNSName: !GetAtt Distribution.DomainName
+
+  DistributionCertificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Sub '${DomainName}.${HostedZoneName}'
+      ValidationMethod: DNS
+
+Outputs:
+  Fn::Outputs:
+    S3Bucket: ${S3Bucket}
+    Distribution: ${Distribution}
+    DistributionDomainName: ${Distribution.DomainName}
+
+    LocalDevAccessKey:
+      Condition: LocalDevEnabled
+      Value: ${LocalDevAccessKey}
+
+    LocalDevSecretKey:
+      Condition: LocalDevEnabled
+      Value: ${LocalDevAccessKey.SecretAccessKey}
+

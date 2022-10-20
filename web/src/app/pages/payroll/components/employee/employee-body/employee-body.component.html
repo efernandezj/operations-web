@@ -1,0 +1,233 @@
+<div class="mt-4">
+    <app-search-profile [withUsernameField]="false" [endPointResource]="'employee'" (searchCompleted)="searchCompleted($event)"></app-search-profile>
+</div>
+
+<div>
+    <div id="divData" style="display:none;"  class="card-shadow">
+        <form [formGroup]="frmGroup" (validSubmit)="formSubmit()">
+            <div>
+                <div class="card card-no-shadow">
+                    <div class="card-header">
+                        Employee
+                    </div>
+
+                    <div class="card-body mb-4">
+                        <div class="col-sm-12">
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Workday Number</label>
+                                        <input type="number" class="form-control" placeholder="######"
+                                            formControlName="workdayNumber">
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Identification Card</label>
+                                        <input type="number" class="form-control" placeholder="#-####-####"
+                                            formControlName="identificationCard">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Company Site</label>
+                                        <select #site class="form-select" aria-label="Default select example"
+                                            formControlName="site"
+                                            (change)="getBanks(site.value)">
+                                            <option value="">-- Please choose one --</option>
+                                            <option *ngFor="let site of initData?.sites" [value]="site.value">
+                                                {{site.display}}</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">My Supervisor</label>
+                                        <input type="text" class="form-control" placeholder="My Supervisor" matInput
+                                            formControlName="supervisor" [matAutocomplete]="auto">
+                                        <mat-autocomplete #auto="matAutocomplete" [displayWith]="displayFn">
+                                            <mat-option *ngFor="let sup of filteredOptions | async" [value]="sup.value">
+                                                {{sup.display}}
+                                            </mat-option>
+                                        </mat-autocomplete>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">First Name</label>
+                                        <input type="text" #code class="form-control" placeholder="first name"
+                                            formControlName="firstName"
+                                            [value]="this.frmGroup.get('firstName')?.value | titlecase">
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Last Name</label>
+                                        <input type="text" class="form-control" placeholder="last name"
+                                            formControlName="lastName"
+                                            [value]="this.frmGroup.get('lastName')?.value |titlecase">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Birth Date</label>
+                                        <input type="text" class="form-control" formControlName="birthDate"
+                                            placeholder="mm/dd/yyyy" [matDatepicker]="BirthDate"
+                                            (click)="BirthDate.open()" (dateChange)="setAge($event.value)">
+                                        <mat-datepicker #BirthDate></mat-datepicker>
+                                    </div>
+                                </div>
+
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Age</label>
+                                        <input type="number" class="form-control" readonly placeholder="##"
+                                            formControlName="age">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Job Title</label>
+                                        <select class="form-select" aria-label="Default select example"
+                                            formControlName="jobTitle">
+                                            <option value="">-- Please choose one --</option>
+                                            <option *ngFor="let job of initData?.jobs" [value]="job.value"
+                                                [disabled]="!job.isActive">{{job.display}}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-6">
+                                    <label class="form-label">Salary</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" placeholder="############"
+                                            formControlName="salary">
+                                        <span class="input-group-text">.00</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Bank Name</label>
+                                        <select class="form-select" formControlName="bankName">
+                                            <option value="">-- Please choose one --</option>
+                                            <option *ngFor="let bank of banks" [value]="bank.value">
+                                                {{bank.display}}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Bank Account Number</label>
+                                        <input type="text" class="form-control" placeholder="IBAN ##################"
+                                            formControlName="bacAccountNumber">
+                                    </div>
+                                </div>
+                            </div>
+
+
+
+                            <div class="row">
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Hire Date</label>
+                                        <input type="text" class="form-control" placeholder="mm/dd/yyyy"
+                                            [matDatepicker]="hireDate" formControlName="hireDate"
+                                            (click)="hireDate.open()">
+                                        <mat-datepicker #hireDate></mat-datepicker>
+                                    </div>
+                                </div>
+                                <div class="col-sm-12 col-md-6">
+                                    <div class="form-group">
+                                        <label class="form-label">Fire Date</label>
+                                        <input type="text" class="form-control" placeholder="mm/dd/yyyy"
+                                            [matDatepicker]="fireDate" formControlName="fireDate"
+                                            (click)="fireDate.open()">
+                                        <mat-datepicker #fireDate></mat-datepicker>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="form-group">
+                                        <div class="d-grid mt-4">
+                                            <button type="button"
+                                                [ngClass]="{ 'btn-danger': !isActive, 'btn-success': isActive }"
+                                                class="btn btn-block" btnCheckbox formControlName="isActive">
+                                                <i *ngIf="isActive" class="far fa-check-square"></i>
+                                                <i *ngIf="!isActive" class="far fa-square"></i>
+                                                {{ isActive ? 'Enable' : 'Disable' }}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer">
+                        <button type="submit" id="cmdSave" class="btn btn-primary mt-1 mb-1" style="margin-right: 10px;"
+                            [disabled]="isSaving">
+                            <i *ngIf="!isSaving" class="fa fa-save"></i>
+                            <i *ngIf="isSaving" class="fas fa-sync fa-spin"></i>
+                            Save
+                        </button>
+                        <button type="button" id="cmdCancel" class="btn btn-danger" (click)="closeForm()">
+                            <i class="fa fa-times"></i>
+                            Cancel
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="mt-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-project-diagram"></i>
+            Employees
+        </div>
+        <div class="card-body mt-4">
+            <div class="table-responsive">
+                <table id="tblResult" datatable [dtOptions]="dtOptions"
+                    class="table table-striped table-bordered w-100">
+                    <thead>
+                        <tr>
+                            <th style="width: 110px;">Workday #</th>
+                            <th style="width: 280px;">Name</th>
+                            <th>Id Card</th>
+                            <th>Status</th>
+                            <th style="width: 5px;">&nbsp;</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="button" class="btn btn-primary" (click)="add()">
+                <i class="fa fa-plus"></i>
+                Add new
+            </button>
+        </div>
+    </div>
+</div>

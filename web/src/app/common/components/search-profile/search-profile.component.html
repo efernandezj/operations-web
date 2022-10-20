@@ -1,0 +1,40 @@
+<form [formGroup]="frmGroup" (ngSubmit)="formSubmit()">
+    <div class="card">
+        <div class="card-header">
+            <i class="fa fa-filter"></i>
+            Search {{cardTitle}}
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div  [ngClass]="withUsernameField ? 'col-md-3' : 'col-md-6' " class="col-sm-12">
+                    <div class="form-group">
+                        <label class="form-label">Workday #</label>
+                        <input type="number" class="form-control" min="0" step="1" placeholder="######"
+                            formControlName="workday">
+                    </div>
+                </div>
+                <div *ngIf="withUsernameField" class="col-sm-12 col-md-3">
+                    <div class="col-sm-12 col-md-12">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control" placeholder="Please type a username" formControlName="username">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-12 col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" placeholder="Please type a name" formControlName="name">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="submit" class="btn btn-primary" [disabled]="searching">
+                <i *ngIf="!searching" class="fa fa-search"></i>
+                <i *ngIf="searching" class="fas fa-sync fa-spin"></i>
+                Search
+            </button>
+        </div>
+    </div>
+</form>

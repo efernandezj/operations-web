@@ -1,0 +1,8 @@
+<h2>User</h2>
+<hr>
+<app-loading *ngIf="loading"></app-loading>
+
+<ng-container *ngIf="!loading">
+    <app-user-body></app-user-body>
+</ng-container>
+

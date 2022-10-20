@@ -1,0 +1,29 @@
+.login-box {
+    height: 45vh;
+}
+
+.card-login-box {
+    background-color: #4DC7E4;
+    max-width: 450px;
+    margin: auto;
+    top:50%;
+}
+
+.btn-white-text {
+    color: white;
+}
+.center {
+    margin: auto;
+}
+
+.card-body {
+    padding: 0 30px 20px 30px;   
+}
+.center-p {
+    position: relative;
+    top: -15px;
+    font-size: 1.1em;
+    font-family: "Open Sans", sans-serif;
+    color: white;
+    padding-bottom: 4px;
+}

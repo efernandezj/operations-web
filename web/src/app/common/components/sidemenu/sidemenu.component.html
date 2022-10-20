@@ -1,0 +1,28 @@
+<!-- ======= Sidebar ======= -->
+<aside id="sidebar" class="sidebar">
+    <ul class="sidebar-nav" id="sidebar-nav">
+        <li class="nav-item">
+            <a class="nav-link" [routerLink]="['/home']" [routerLinkActive]="'active'" (click)="toggleMenu('mn-')">
+                <i class="fa-solid fa-house"></i>
+                <span>Home</span>
+            </a>
+        </li>
+
+        <!-- Dynamic Menu Content -->
+        <!-- Level 1 -->        
+        <li  class="nav-item" *ngFor="let mod of modules; let i = index" >
+            <a class="nav-link collapsed" appCollapseable [class.active]="router.isActive(mod.items![0].Parent, false)"  (click)="toggleMenu('mn-'+i)">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i><span>{{mod.Menu}}</span><i class="fa-solid fa-angle-down ms-auto"></i>
+            </a>
+
+            <!-- Level 2 -->
+            <ul id="mn-{{i}}" class="nav-content collapse" data-bs-parent="#sidebar-nav">
+                <li *ngFor="let item of mod.items"> 
+                    <a [routerLinkActive]="'active'"  *ngIf="item.Component !== ''" [routerLink]="['/', item.Parent, item.Component]">
+                        <i class="bi bi-circle"></i><span>{{item.Name}}</span>
+                    </a>
+                </li>
+            </ul>
+        </li>
+    </ul>  
+</aside>

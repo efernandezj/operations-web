@@ -1,0 +1,6 @@
+<h2>Employee</h2>
+<hr>
+<app-loading *ngIf="loading"></app-loading>
+
+
+<app-employee-body *ngIf="!loading" [initData]="initData"></app-employee-body>

@@ -1,0 +1,32 @@
+<!-- Div to display login component -->
+<div>
+    <router-outlet *ngIf="!isLogin"></router-outlet>
+</div>
+
+<!-- Div to display loading component -->
+<div *ngIf="isLoading" class="my-4">
+    <div class="container text-center">
+        <h4 class="text-uppercase">Spark Core</h4>
+        <hr>
+        <app-loading></app-loading>
+    </div> 
+</div>
+
+<!-- Div to display default layout -->
+<div *ngIf="isLogin && !isLoading">
+  <ng-container>
+        <app-navbar [account]="account"></app-navbar>
+
+        <div class="wrapper">
+            <app-sidemenu></app-sidemenu>
+            <div id="page-content-wrapper">
+                <div class="container-fluid">
+                    <main id="main" class="main">
+                        <router-outlet></router-outlet>
+                    </main>
+                    
+                </div>
+            </div>
+        </div>
+    </ng-container>
+</div>

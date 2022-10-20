@@ -1,0 +1,27 @@
+version: '3.9'
+services:
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    user: root
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+              
+  phpmyadmin:
+    container_name: phpmyadmin
+    image: phpmyadmin
+    ports:
+      - '4000:80'
+    depends_on:
+      - mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+    links:
+      - 'mysql:db'
+
+volumes:
+    mysql-data:

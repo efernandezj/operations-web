@@ -1,0 +1,13 @@
+[
+  { "ParameterKey": "ParentStackName", "ParameterValue": "aligners-vpc-dev-02" },
+  { "ParameterKey": "HostedZoneName", "ParameterValue": "dev.ormcodigital.com" },
+  { "ParameterKey": "HostedZoneId", "ParameterValue": "Z33G8FXA2OB9PN" },
+  { "ParameterKey": "DomainName", "ParameterValue": "operations" },
+  { "ParameterKey": "PriorityPrefix", "ParameterValue": "40" },
+  { "ParameterKey": "DatabasePassword", "ParameterValue": "oaraij1ee2paighaJohgh3oth4axahm9" },
+  { "ParameterKey": "BastionKey", "ParameterValue": "aligners-vpc-dev-2022-10-17" },
+  { "ParameterKey": "StartServices", "ParameterValue": "true" },
+  { "ParameterKey": "DeployServices", "ParameterValue": "true" },
+  { "ParameterKey": "LocalDev", "ParameterValue": "enabled" },
+  { "ParameterKey": "TrustedCIDRs", "ParameterValue": "206.220.100.9/32,206.220.102.9/32,70.63.103.170/32,194.88.30.4/32,194.88.28.4/32,101.230.229.225/32,113.29.13.44/32,213.173.179.11/32,81.29.201.129/32,81.29.201.78/32,186.238.4.13/32,12.124.196.30/30,208.46.166.82/29,54.215.145.48/32,13.52.15.49/32,52.8.98.246/32,52.53.113.102/32,192.8.240.93/32,192.8.254.10/32,109.166.244.4/32,109.166.244.252/30" }
+]

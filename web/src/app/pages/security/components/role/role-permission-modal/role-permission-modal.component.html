@@ -1,0 +1,55 @@
+<form>
+    <div class="modal-header">
+        <h4 class="modal-title pull-left">
+            <i class="fa fa-filter"></i>
+            Permissions
+        </h4>
+        <button type="button" class="btn-close" aria-label="Close" (click)="modalRef?.hide()"></button>
+    </div>
+
+    <div class="modal-body">
+        <div class="row">
+            <div class="col-sm-12">
+                <label class="form-label">Module</label>
+                <select class="form-control custom-select">
+                    <option value=""> -- Please choose one -- </option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered w-100">
+                <thead>
+                    <tr class="text-center">
+                        <th class="w-50">Module</th>
+                        <th>Select</th>
+                        <th>Create</th>
+                        <th>Edit</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="text-center">
+                        <td colspan="6">0 modules found</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+
+    
+    <div class="modal-footer">
+        <div class="d-flex justify-content-between w-100">
+            <button type="submit" class="btn btn-sm btn-primary" [disabled]="saving">
+                <i *ngIf="!saving" class="fa fa-search"></i>
+                <i *ngIf="saving" class="fas fa-sync fa-spin"></i>
+                Search
+            </button>
+            <button type="button" class="btn btn-sm btn-danger ml-2" (click)="modalRef?.hide()">
+                <i class="fa fa-times"></i>
+                Cancel
+            </button>
+        </div>
+    </div>
+</form>

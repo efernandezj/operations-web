@@ -1,0 +1,53 @@
+<form  [formGroup]="frmGroup" (ngSubmit)="formSubmit()">
+    <div class="modal-header">
+        <h4 class="modal-title pull-left">
+            <i class="fa fa-filter"></i>
+            Search
+        </h4>
+        <button type="button" class="btn-close" aria-label="Close" (click)="modalRef?.hide()"></button>
+    </div>
+
+    <div class="modal-body">
+        <div class="row">
+            <div class="col-sm-12">
+                <div class="form-group">
+                    <label class="form-label">Workday #</label>
+                    <input type="number" class="form-control" min="0" placeholder="######"
+                        formControlName="workday">
+                </div>
+            </div>
+        </div>
+        <div *ngIf="withUsernameField" class="row">
+            <div class="col-sm-12">
+
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" placeholder="Please type a username"
+                        formControlName="username">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-sm-12">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" class="form-control" placeholder="Please type a name" formControlName="name">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-footer">
+        <div class="d-flex justify-content-between w-100">
+            <button type="submit" class="btn btn-primary" [disabled]="searching">
+                <i *ngIf="!searching" class="fa fa-search"></i>
+                <i *ngIf="searching" class="fas fa-sync fa-spin"></i>
+                Search
+            </button>
+            <button type="button" class="btn btn-danger ml-2" (click)="modalRef?.hide()">
+                <i class="fa fa-times"></i>
+                Cancel
+            </button>
+        </div>
+    </div>
+</form>

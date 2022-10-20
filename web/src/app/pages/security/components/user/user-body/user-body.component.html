@@ -1,0 +1,130 @@
+<!-- Search Component -->
+<div class="mt-4">
+    <app-search-profile [withUsernameField]="false" [endPointResource]="'user/active'" [cardTitle]="'User'"
+        (searchCompleted)="searchCompleted($event)"></app-search-profile>
+</div>
+
+
+<!-- User Info -->
+<div id="divData" style="display: none;" class="card-shadow">
+    <form [formGroup]="frmGroup" (validSubmit)="formSubmit()">
+        <div>
+            <div class="card card-no-shadow">
+                <div class="card-header">
+                    Employee
+                </div>
+
+                <div class="card-body mb-4">
+                    <div class="col-sm-12">
+
+                        <div class="row">
+                            <div class="col-sm-12 col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Workday Number</label>
+                                    <input type="number" class="form-control" placeholder="######"
+                                        formControlName="workdayNumber">
+                                </div>
+                            </div>
+                            <div class="col-sm-12 col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Name</label>
+                                    <input type="text" class="form-control" placeholder="#-####-####"
+                                        formControlName="name">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-sm-12 col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Email</label>
+                                    <input type="text" class="form-control" placeholder="######"
+                                        formControlName="email">
+                                </div>
+                            </div>
+                            <div class="col-sm-12 col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Username</label>
+                                    <input type="text" class="form-control" placeholder="********"
+                                        formControlName="username" [class.is-invalid]="isUsernameInvalid">
+                                    <small *ngIf="isUsernameInvalid" class="text-danger">Username is already assinged. Please edit it.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <div class="d-grid mt-4">
+                                        <button type="button"
+                                            [ngClass]="{ 'btn-danger': !isActive, 'btn-success': isActive }"
+                                            class="btn btn-block" btnCheckbox formControlName="isActive">
+                                            <i *ngIf="isActive" class="far fa-check-square"></i>
+                                            <i *ngIf="!isActive" class="far fa-square"></i>
+                                            {{ isActive ? 'Enable' : 'Disable' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    <button type="submit" id="cmdSave" class="btn btn-primary mt-1 mb-1" style="margin-right: 10px;"
+                        [disabled]="isSaving">
+                        <i *ngIf="!isSaving" class="fa fa-save"></i>
+                        <i *ngIf="isSaving" class="fas fa-sync fa-spin"></i>
+                        Save
+                    </button>
+                    <button type="button" id="cmdCancel" class="btn btn-danger" (click)="closeForm()">
+                        <i class="fa fa-times"></i>
+                        Cancel
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </form>
+</div>
+
+
+<!-- Search Results -->
+<div class="mt-4">
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-project-diagram"></i>
+            Users
+        </div>
+        <div class="card-body mt-4">
+            <div class="table-responsive">
+                <table id="tblResult" datatable [dtOptions]="dtOptions"
+                    class="table table-striped table-bordered w-100">
+                    <thead>
+                        <tr>
+                            <th style="width: 110px;">Workday #</th>
+                            <th style="width: 260px;">Employee Name</th>
+                            <th style="width: 160px;">Username</th>
+                            <th>Email</th>
+                            <th style="width: 80px;">Status</th>
+                            <th style="width: 5px;">&nbsp;</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button type="button" class="btn btn-primary" (click)="addNew(tplUser)">
+                <i class="fa fa-plus"></i>
+                Add new
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Create New User -->
+<ng-template #tplUser>
+    <app-search-user-modal [modalRef]="modalRef" (searchCompleted)="searchCompleted($event)"></app-search-user-modal>
+</ng-template>
